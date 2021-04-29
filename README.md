@@ -4,4 +4,3 @@ Supplementary material from the paper "An Interpretable Recommendation Model for
 ***
 **(1) Data used to render Figure 4 is available in filteredResults.csv.** The file uses tab as column separator. The column `essay` corresponds to a condition of the study, which is fully described by the `cutoff` and `#groups` columns. In each condition, a `model` may have been evaluated using diverse `params`. Columns `ci precision lb` and `ci precision ub` describe the confidence interval around the mean performance, and `ci precision mu` is the point estimate. Finally, `sample size` indicates the number of samples used to obtain a bootstrap estimate of the confidence interval.
 It must be seen that multiple configurations of the same model may attain equivalent levels of performance. In this case, all configurations are listed. For example, in `essay` 1, several configurations of MLP attained equivalent, top level performance.
-***
