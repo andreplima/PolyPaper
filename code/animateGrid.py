@@ -1,10 +1,8 @@
 import os
 import sys
-import numpy  as np
-import pandas as pd
 
-from customDefs import ECO_SEED, tsprint, deserialise
-from customDefs import retraceOfferGrid
+from customDefs import tsprint, deserialise
+from customDefs import animateOfferGrid
 
 def main():
 
@@ -21,7 +19,7 @@ def main():
   tsprint('-- creating an animation to retrace the learning process')
   filename    = 'retrace_learning'
   plotTitle   = "Differential evolution applied to offer optimisation "
-  retraceOfferGrid(history, train, tomains, ulimits, plotTitle, filename)
+  animateOfferGrid(history, train, tomains, ulimits, plotTitle, filename)
 
   print()
   tsprint('Job completed.')

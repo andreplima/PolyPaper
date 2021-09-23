@@ -1,12 +1,14 @@
 import pickle
 import codecs
+import warnings
 
 import numpy as np
 import matplotlib
 import matplotlib.pyplot    as plt
 import matplotlib.animation as manimation
 
-from datetime      import datetime
+from copy                    import copy
+from datetime                import datetime
 from shapely.geometry        import Polygon
 from matplotlib.collections  import LineCollection, PolyCollection
 from scipy.cluster.hierarchy import dendrogram
@@ -16,6 +18,7 @@ from sklearn.cluster         import AgglomerativeClustering
 ECO_SEED = 23
 ECO_MAXCORES = 4
 ECO_DATETIME_FMT = '%Y%m%d%H%M%S'
+ECO_MAXNCOLS = 5 # used in the animated grid
 
 # constants identifying polygon drawing patterns
 ECO_PTRN_DEMAND  = 0
@@ -25,6 +28,8 @@ ECO_PTRN_BENEFIT = 2
 #--------------------------------------------------------------------------------------------------
 # General purpose definitions - I/O interfaces used in logging and serialisation
 #--------------------------------------------------------------------------------------------------
+
+warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
 
 def stimestamp():
   return(datetime.now().strftime(ECO_DATETIME_FMT))
@@ -87,10 +92,44 @@ def getPlotParams1():
 
   return (unitsizes, fontgon, innerseps, xoffset, yoffset, titleoffset, tagoffset)
 
+def getPlotParams2():
+  #unitsizes   = [6.0, 5.6]
+  unitsizes   = [3, 2.8]
+  fontgon     = {'family': 'arial', 'color':  'black', 'weight': 'normal', 'size': 10}
+  innerseps   = {'left': 0.06, 'bottom': 0.06, 'right': 0.94, 'top': 0.96, 'wspace': 0.52, 'hspace': 0.40}
+  xoffset     = [ 0.02, -0.20, -0.48, -0.20]
+  yoffset     = [-0.04,  0.04, -0.05, -0.12]
+  titleoffset = [ 0.50,  1.15, -0.32,  0.51]
+  tagoffset   = [ 0.78,  0.78, -45]
+
+  return (unitsizes, fontgon, innerseps, xoffset, yoffset, titleoffset, tagoffset)
+
+def getMovParams():
+
+  unitsizes   = [6.0, 5.6]
+  fontgon     = {'family': 'arial', 'color':  'black', 'weight': 'normal', 'size': 10}
+  innerseps   = {'left': 0.06, 'bottom': 0.10, 'right': 0.94, 'top': 0.80, 'wspace': 0.52, 'hspace': 0.30}
+  xoffset     = [ 0.02, -0.20, -0.48, -0.20]
+  yoffset     = [-0.04,  0.04, -0.05, -0.12]
+  titleoffset = [ 0.50,  1.15, -0.32,  0.51]
+  tagoffset   = [ 0.78,  0.78, -45]
+  dpi         = 300
+  fps         = 2
+
+  return (unitsizes, fontgon, innerseps, xoffset, yoffset, titleoffset, tagoffset, dpi, fps)
+
+def getLearnParams():
+  strategy      = 'best1bin'
+  maxiter       = 500
+  popsize       = 15
+  mutation      = (0.001, 0.500)
+  recombination = 0.60
+  return (strategy, maxiter, popsize, mutation, recombination)
+
 #--------------------------------------------------------------------------------------------------
 # Problem-specific definitions: patient stratification
 #--------------------------------------------------------------------------------------------------
-def plotDendrogram(X, case_ids, cutoff, sample_redro):
+def plotDendrogram(X, case_ids, cutoff, sample_redro, plotTitle, filename):
 
   def createDendrogram(model, **kwargs):
 
@@ -132,9 +171,9 @@ def plotDendrogram(X, case_ids, cutoff, sample_redro):
   plt.title(plotTitle)
   leaves = createDendrogram(model, truncate_mode = None, distance_sort = 'ascending')
   case_ids_ao = [sample_redro[i] for i in leaves]
-  plt.xlabel("Number of points in node (or index of point if no parenthesis).")
+  plt.xlabel("Patient Index (within the sample)")
 
-  plt.savefig('dendrogram', bbox_inches = 'tight')
+  plt.savefig(filename, bbox_inches = 'tight')
   plt.close(fig)
 
   return case_ids_ao, res
@@ -159,19 +198,19 @@ def scores2coords(scores, tomains, ulimits):
   axes  = [(tomains[i], i * ra) for i in range(nd)] # ~ [(domain LABEL, axis angle), ...]
 
   # converts the scores to the cartesian coordinates describing the vertices of a regular nd-polygon
-  L = []
+  coords = []
   for (domain, theta) in axes:
     r = scores[domain] / ulimits[domain] # scales the score of the current domain to the [0, 1] interval
     x = r * np.cos(theta)                # the x-coord of the vertice that corresponds to the current score
     y = r * np.sin(theta)                # the y-coord of the vertice that corresponds to the current score
-    L.append((x, y))
+    coords.append((x, y))
 
-  return L
+  return coords
 
 def coords2poly(coords):
   return Polygon(coords)
 
-def projectOp(scores, tomains, ulimits):
+def projectionOp(scores, tomains, ulimits):
   coords = scores2coords(scores, tomains, ulimits)
   poly   = coords2poly(coords)
   return poly
@@ -207,7 +246,7 @@ def callbackfn(chromosome, convergence):
   GlbBuffer.append((chromosome, convergence))
   return False
 
-def learn(case_ids, case_s, ulimits, llimits, tomains, treatment_h, params, workers, overridePopsize=0):
+def learn(train, tomains, llimits, ulimits):
 
   # a global variable that will be used by a callback function to store intermediary solutions from
   # the scipy.differential_evolution implementation
@@ -215,25 +254,29 @@ def learn(case_ids, case_s, ulimits, llimits, tomains, treatment_h, params, work
   GlbBuffer = []
 
   # unpacks parameters
-  (strategy, maxiter, popsize, mutation, recombination) = params
-  if(overridePopsize > 0):
-    popsize = overridePopsize
+  (strategy, maxiter, popsize, mutation, recombination) = getLearnParams()
 
-  # computes the demand representations for the sample of cases
-  demands = {}
-  for case_id in case_ids:
-    demands[case_id] = coords2poly(scores2coords(case_s[case_id], tomains, ulimits))
+  # creates auxiliary data to support the optimisation process
+  case_ids = []
+  case_s   = {}
+  demands  = {}
+  treatment_h = {}
+  for case_id, row in train.iterrows():
+    case_ids.append(case_id)
+    scores = row[['DOM1', 'DOM2', 'DOM3', 'DOM4']]
+    case_s[case_id]  = scores
+    demands[case_id] = projectionOp(scores, tomains, ulimits)
+    treatment_h[case_id] = row['intervention']
 
   # recovers the list of treatments recommended in the sample of cases
-  L = [treatment_h[case_id]['Treatments'] for case_id in case_ids]
-  treatment_ids = sorted(set([item for sublist in L for item in sublist]))
+  treatment_ids = sorted(set([treatment_h[case_id] for case_id in case_ids]))
 
   # prepares the remaining parameters required by the optimiser
   bounds = [(llimits[domain], ulimits[domain]) for domain in tomains for _ in treatment_ids]
   args   = (case_ids, demands, treatment_ids, treatment_h, tomains, ulimits)
 
   # seeks for offer representations that satisfy the constraints posed by the objective function
-  res = differential_evolution(objfn2,
+  res = differential_evolution(objfn,
                                bounds,
                                args     = args,
                                strategy = strategy,
@@ -241,10 +284,9 @@ def learn(case_ids, case_s, ulimits, llimits, tomains, treatment_h, params, work
                                recombination = recombination,
                                maxiter  = maxiter,
                                popsize  = popsize,
-                               callback = callbackfn2,
+                               callback = callbackfn,
                                polish   = True,
-                               #init     = 'random',
-                               workers  = workers, # only available in scipy 1.2+
+                               workers  = ECO_MAXCORES, # only available in scipy 1.2+
                                updating = 'deferred',
                                disp     = False,
                                seed     = ECO_SEED)
@@ -252,7 +294,7 @@ def learn(case_ids, case_s, ulimits, llimits, tomains, treatment_h, params, work
   treatment_s = chromosome2scores(res.x, treatment_ids, tomains, ulimits)
   offers  = {}
   for treatment in treatment_s:
-    offers[treatment] = coords2poly(scores2coords(treatment_s[treatment], tomains, ulimits))
+    offers[treatment] = projectionOp(treatment_s[treatment], tomains, ulimits)
 
   return (treatment_s, offers, GlbBuffer)
 
@@ -274,53 +316,76 @@ def objfn(chromosome, *args):
   # converts the scores of each treatment to their corresponding offer representations
   offers = {}
   for treatment in treatment_s:
-    offers[treatment] = coords2poly(scores2coords(treatment_s[treatment], tomains, ulimits))
+    offers[treatment] = projectionOp(treatment_s[treatment], tomains, ulimits)
 
   # computes the number of hits achieved by the solution
-  tries = 0
-  hits  = 0
-  for case_id in demands:
-    demand = demands[case_id]
-    expert_advice = treatment_h[case_id]['Treatments']
-    nt = len(expert_advice) # number of treatments associated with the case in hand
-
-    # applies the current solution to obtain a ranking of available treatments
-    L = []
-    for treatment_id in offers:
-      offer   = offers[treatment_id]
-      alpha   = matchp(offer, demand)
-      L.append((treatment_id, alpha))
-    L = sorted([(treatment_id, alpha) for (treatment_id, alpha) in L], key = lambda e: -e[1])
-    system_advice = [treatment_id for (treatment_id, alpha) in L if alpha != 0.0]
-
-    acc = 0.0
-    for i in range(nt):
-      treatment_id = expert_advice[i]
-      try:
-        j = system_advice.index(treatment_id)
-        acc += 1 / (abs(i - j) + 1)
-      except ValueError:
-        #acc += 0.0
-        pass
-
-    hits  += acc
-    tries += nt
-
+  hits, tries, _ = evaluate(case_ids, treatment_h, demands, offers)
   fitness = hits/tries
 
   return -fitness
 
-def details2text(details, test, sample_order):
-  #xxx add column partition
-  header  = 'CaseID\tSample Order\tPrecision\tExpert Advice\tSystem Advice\tDetails'
+#--------------------------------------------------------------------------------------------------
+# Problem-specific definitions: evaluation of learned representations
+#--------------------------------------------------------------------------------------------------
+def precision(judgements, truth, N = 0):
+
+  if(N <= 0): N = len(judgements) # corresponds to N -> +inf
+
+  acc = 0.0
+  n = len(truth)
+  for i in range(n):
+    try:
+      j = judgements[0:N].index(truth[i])
+      acc += 1 / (abs(i - j) + 1)
+    except ValueError:
+      None
+
+  return acc/n
+
+def evaluate(case_ids, treatment_h, demands, offers, details = {}):
+
+  # computes the number of hits achieved by the solution
+  tries = 0
+  hits  = 0
+  for case_id in case_ids:
+    demand = demands[case_id]
+
+    expert_advice = treatment_h[case_id]
+    nt = len(expert_advice) # number of treatments associated with the case in hand
+
+    # applies the model to obtain a ranking of available treatments
+    L = []
+    for treatment_id in offers:
+      offer   = offers[treatment_id]
+      alpha   = matchOp(offer, demand)
+      L.append((treatment_id, alpha))
+    L = sorted([(treatment_id, alpha) for (treatment_id, alpha) in L], key = lambda e: -e[1])
+    system_advice = [treatment_id for (treatment_id, alpha) in L if alpha != 0.0]
+
+    # computes the precision of the model in the given test sample
+    # -- this is precision@N, with N = len(system_advice)
+    acc = precision(system_advice, expert_advice)
+    tries += nt
+    hits  += acc * nt
+
+    details[case_id] = (acc, expert_advice, system_advice, L)
+
+  return hits, tries, details
+
+def details2text(details, sample_order, case_ids_test):
+  header  = 'CaseID\tSample Order\tPartition\tPrecision\tExpert Advice\tSystem Advice\tDetails'
   content = [header]
   for case_id in details:
+    partition = 'Test' if case_id in case_ids_test else 'Other'
     (precision, expert_advice, system_advice, L) = details[case_id]
-    content.append('{0}\t{1}\t{2:5.3f}\t{3}\t{4}\t{5}'.format(case_id, sample_order[case_id], precision, expert_advice, system_advice, L))
+    content.append('{0}\t{1}\t{2}\t{3:5.3f}\t{4}\t{5}\t{6}'.format(case_id, sample_order[case_id], partition, precision, expert_advice, system_advice, L))
 
   return '\n'.join(content)
 
-def plotOfferGrid(case_ids, case_s, treatment_s, details, tomains, ulimits, sample_order, params, plotTitle, filename):
+#--------------------------------------------------------------------------------------------------
+# Problem-specific definitions: plots and animations
+#--------------------------------------------------------------------------------------------------
+def plotOfferGrid(case_ids, case_s, treatment_s, details, tomains, ulimits, sample_order, plotTitle, filename):
 
   # | (1) empty      | (2) offer1 | (3) offer2 | ... | (m) offer m | -> i == 0
   # | (m+1) demand 1 | (m+2) d*o  | (m+3) d*0  | ... | (2m) d*0    |
@@ -329,7 +394,7 @@ def plotOfferGrid(case_ids, case_s, treatment_s, details, tomains, ulimits, samp
   # |     j == 0     |
 
   # unpacks parameters
-  (unitsizes, fontgon, innerseps, xoff, yoff, titleoffset, tagoffset, saveit, targetpath) = params
+  (unitsizes, fontgon, innerseps, xoff, yoff, titleoffset, tagoffset) = getPlotParams1()
   (unitsizew, unitsizeh) = unitsizes
   (xoffcol, yoffcol, xoffrow, yoffrow) = titleoffset
   (xofftag, yofftag, rofftag) = tagoffset
@@ -341,7 +406,6 @@ def plotOfferGrid(case_ids, case_s, treatment_s, details, tomains, ulimits, samp
   nrows = len(case_ids)      + 1  # number of rows    in the grid, plus one (top  header)
   ncols = len(treatment_ids) + 1  # number of columns in the grid, plus one (left header)
   fig, axes = plt.subplots(nrows, ncols, figsize=(ncols * unitsizew, nrows * unitsizeh))
-
 
   for i in range(nrows):
     case_id = case_ids[i - 1] if (i > 0) else None
@@ -362,7 +426,7 @@ def plotOfferGrid(case_ids, case_s, treatment_s, details, tomains, ulimits, samp
 
         # this cell remains empty; no case_id or treatment_id is assignable to it
         # plt.suptitle(plotTitle, fontsize = 1.8 * fontgon['size'])
-        None
+        pass
 
       elif(i == 0):
 
@@ -425,9 +489,12 @@ def plotOfferGrid(case_ids, case_s, treatment_s, details, tomains, ulimits, samp
           if(type(benefit) == Polygon):
             benefit = [benefit]
           for poly in benefit:
-            vertices = list(poly.exterior.coords)
-            pc = drawPolygon(vertices, ECO_PTRN_BENEFIT)
-            plt.gca().add_collection(pc)
+            try:
+              vertices = list(poly.exterior.coords)
+              pc = drawPolygon(vertices, ECO_PTRN_BENEFIT)
+              plt.gca().add_collection(pc)
+            except ValueError:
+              pass
 
         # plots the expected benefit as text tag
         if(val > 0.0001):
@@ -447,17 +514,8 @@ def plotOfferGrid(case_ids, case_s, treatment_s, details, tomains, ulimits, samp
       plt.gca().autoscale()
       plt.gca().axis('off')
 
-  if(saveit):
-    #print('-- saving the plot.')
-    if(not os.path.exists(os.path.join(*targetpath))):
-      os.makedirs(os.path.join(*targetpath))
-    plt.savefig(os.path.join(*targetpath, '{0}'.format(filename)), bbox_inches = 'tight')
-    plt.close(fig)
-
-  else:
-    print('-- rendering the plot.')
-    plt.show()
-    print('   figure width is {0} and height is {1}'.format(fig.get_figwidth(), fig.get_figheight()))
+  plt.savefig('patient_treatment_grid', bbox_inches = 'tight')
+  plt.close(fig)
 
 def drawGuides(tomains, ulimits, xoff, yoff, fontgon):
 
@@ -524,18 +582,40 @@ def drawPolygon(vertices, pattern):
 
   return pc
 
-def retraceOfferGrid(history, splits, dsplits, demands, tomains, ulimits, treatment_h, params, plotTitle, filename):
+def animateOfferGrid(history, train, tomains, ulimits, plotTitle, filename):
 
   # unpacks parameters
-  (unitsizes, fontgon, innerseps, xoff, yoff, titleoffset, tagoffset, dpi, fps,
-   grid, row_script, saveit, targetpath) = params
+  (unitsizes, fontgon, innerseps, xoff, yoff, titleoffset, tagoffset, dpi, fps) = getMovParams()
   (unitsizew, unitsizeh) = unitsizes
   (xoffcol, yoffcol, xoffrow, yoffrow) = titleoffset
   (xofftag, yofftag, rofftag) = tagoffset
-  (nrows, ncols) = grid # grid size
+
+  # creates auxiliary data to support the optimisation process
+  case_ids = []
+  demands  = {}
+  treatment_h = {}
+  for case_id, row in train.iterrows():
+    case_ids.append(case_id)
+    scores = row[['DOM1', 'DOM2', 'DOM3', 'DOM4']]
+    demands[case_id] = projectionOp(scores, tomains, ulimits)
+    treatment_h[case_id] = row['intervention']
 
   # recovers the list of treatments recommended in the sample of cases
-  treatment_ids = sorted(dsplits['Train'])
+  treatment_ids = sorted(set([treatment_h[case_id] for case_id in case_ids]))
+
+  # determines the format of the grid
+  numoftr = len(treatment_ids)
+  nrows = 1 + numoftr // ECO_MAXNCOLS
+  ncols = ECO_MAXNCOLS
+  ncels = nrows*ncols
+  grid  = (nrows, ncols)
+  row_script = []
+  for i in range(ncels):
+    try:
+      row_script.append((treatment_ids[i], i + 1))
+    except IndexError:
+      row_script.append((' ', i + 1))
+  row_script[ncels - 1] = ('.', ncels)
 
   # recovers the trail of the evolution of offer representation during the optimisation
   data = history # data stored in the GlbBuffer during optimiseOffer
@@ -561,10 +641,19 @@ def retraceOfferGrid(history, splits, dsplits, demands, tomains, ulimits, treatm
 
     if(treatment_id == '.'):
 
-      plt.gca().set_title('Progress')
+      # draws the background elements of the "Progress" panel
       plt.gca().set_xlim([0.0, nsteps])
-      plt.gca().set_ylim([0.0, 1.01])
-      plt.gca().set_xlabel('iteration')
+      plt.gca().set_ylim([0.0, 1.05])
+      plt.gca().set_xlabel('generation')
+
+      plt.gca().scatter(0, 0, marker='.', s=2, color='red',    label='Improvement')
+      plt.gca().scatter(0, 0, marker='.', s=2, color='blue',   label='Convergence')
+      plt.gca().scatter(0, 0, marker='.', s=2, color='yellow', label='MAP')
+      plt.gca().legend(loc='lower left', fontsize='xx-small', ncol=2, mode='expand', edgecolor='white', bbox_to_anchor=(0.45, 1))
+
+    elif(treatment_id == ' '):
+
+      plt.gca().axis('off')
 
     else:
       plt.subplots_adjust(left   = innerseps['left'],
@@ -590,7 +679,7 @@ def retraceOfferGrid(history, splits, dsplits, demands, tomains, ulimits, treatm
       plt.gca().axis('off')
 
   # plots the offer representation at each optimisation step
-  with writer.saving(fig, os.path.join(*targetpath, filename + '.mp4'), dpi):
+  with writer.saving(fig, filename + '.mp4', dpi):
 
     last_precision = 0.0
     for (chromosome, convergence) in data:
@@ -608,7 +697,7 @@ def retraceOfferGrid(history, splits, dsplits, demands, tomains, ulimits, treatm
             offers[treatment] = coords2poly(scores2coords(treatment_s[treatment], tomains, ulimits))
 
           # computes the performance of the obtained offer representations
-          hits, tries, _ = estimatePrecisionPoly(splits['Train'], treatment_h, demands, offers)
+          hits, tries, _ = evaluate(train.index, treatment_h, demands, offers)
           precision = hits/tries
 
           # updates the progress chart with convergence and precision
@@ -624,61 +713,15 @@ def retraceOfferGrid(history, splits, dsplits, demands, tomains, ulimits, treatm
             # a yellow dot represents no improvement in precision relative to the last iteration
             plt.gca().scatter(it, precision,   marker='.', s=2, color='yellow')
 
+        elif(treatment_id == ' '):
+
+          pass
+
         else:
           opc = drawDiagram(treatment_s[treatment_id], tomains, ulimits, ECO_PTRN_OFFER)
           col.append(plt.gca().add_collection(opc))
 
       writer.grab_frame()
-      #for e in col: e.remove()
       for e in col: e.set_edgecolor('lightgray')
 
   return None
-
-#--------------------------------------------------------------------------------------------------
-# Problem-specific definitions: evaluation of learned representations
-#--------------------------------------------------------------------------------------------------
-def precision(judgements, truth, N = 0):
-
-  if(N <= 0): N = len(judgements) # corresponds to N -> +inf
-
-  acc = 0.0
-  n = len(truth)
-  for i in range(n):
-    try:
-      j = judgements[0:N].index(truth[i])
-      acc += 1 / (abs(i - j) + 1)
-    except ValueError:
-      None
-
-  return acc/n
-
-def evaluate(case_ids, treatment_h, demands, offers, details = {}):
-
-  # computes the number of hits achieved by the solution
-  tries = 0
-  hits  = 0
-  for case_id in case_ids:
-    demand = demands[case_id]
-
-    expert_advice = treatment_h[case_id]['Treatments']
-    nt = len(expert_advice) # number of treatments associated with the case in hand
-
-    # applies the model to obtain a ranking of available treatments
-    L = []
-    for treatment_id in offers:
-      offer   = offers[treatment_id]
-      alpha   = matchp(offer, demand)
-      L.append((treatment_id, alpha))
-    L = sorted([(treatment_id, alpha) for (treatment_id, alpha) in L], key = lambda e: -e[1])
-    system_advice = [treatment_id for (treatment_id, alpha) in L if alpha != 0.0]
-
-    # computes the precision of the model in the given test sample
-    # -- this is precision@N, with N = len(system_advice)
-    acc = precision(system_advice, expert_advice)
-    tries += nt
-    hits  += acc * nt
-
-    details[case_id] = (acc, expert_advice, system_advice, L)
-
-  return hits, tries, details
-

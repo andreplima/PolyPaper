@@ -49,7 +49,9 @@ def main(ss, cutoff):
   case_ids = ['P{0}'.format(i+1)  for i in range(ss)]
   sample_order = {case_ids[i] : i for i in range(ss)}
   sample_redro = {i : case_ids[i] for i in range(ss)}
-  case_ids_ao, labels = plotDendrogram(X, case_ids, cutoff, sample_redro)
+  filename  = 'dendrogram'
+  plotTitle = 'Dendrogram showing similarity among patient assessments (euclidean distance, ward linkage)'
+  case_ids_ao, labels = plotDendrogram(X, case_ids, cutoff, sample_redro, plotTitle, filename)
 
   # creates a synthetic clinical dataset
   # (in Section 4, see the paragraph describing the Dataset)
@@ -89,11 +91,11 @@ def main(ss, cutoff):
   # evaluates the learned representations
   tsprint('Evaluating learned representations')
   details  = {}
-  case_ids = list(set(train.index))
+  case_ids = train.index
   hits, tries, details = evaluate(case_ids, treatment_h, demands, offers, details)
   tsprint('   [Train] average precision of {2:5.3f} ({0:7.3f} hit(s) out of {1})'.format(hits, tries, hits/tries))
 
-  case_ids = list(set(test.index))
+  case_ids = test.index
   hits, tries, details = evaluate(case_ids, treatment_h, demands, offers, details)
   tsprint('   [Test]  average precision of {2:5.3f} ({0:7.3f} hit(s) out of {1})'.format(hits, tries, hits/tries))
 

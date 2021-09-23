@@ -1,9 +1,7 @@
 import os
 import sys
-import numpy  as np
-import pandas as pd
 
-from customDefs import ECO_SEED, tsprint, deserialise
+from customDefs import tsprint, deserialise
 from customDefs import plotOfferGrid
 
 def main():
