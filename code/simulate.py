@@ -19,8 +19,6 @@ import pandas as pd
 from customDefs import ECO_SEED, tsprint, saveAsText, serialise
 from customDefs import projectionOp, learn, evaluate
 from customDefs import getDistParams, plotDendrogram, details2text
-
-from shapely.geometry        import Polygon
 from sklearn.model_selection import train_test_split
 
 ECO_DOMAINS  = {'DOM1': (4, 20), 'DOM2': (4, 20), 'DOM3': (4, 20), 'DOM4': (4, 20)}
