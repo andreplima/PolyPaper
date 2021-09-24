@@ -16,7 +16,8 @@ This plot is a super-set of the content shown in Figure 2 of the paper.
 *   `animateGrid.py`: builds an animation that retraces the learning process from which the representations for interventions were obtained. The animation is
 saved in the `retrace_learning.mp4` file.
 
-The requirements to run the scripts in this prototype is specified in the `requirements.txt` file.
+The requirements to run the scripts in this prototype is specified in the `polypaper.yml` file.
+To create an environment using conda, use `conda env create -f polypaper.yml`.
 
 
 
