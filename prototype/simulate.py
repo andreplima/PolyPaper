@@ -10,6 +10,10 @@
   described in the article. Given that access to the clinical data employed in the study is
   not publicly available, this prototype does not support full reproduction.
 
+  Note: in sake of simplicity, in the comments below, you may interpret the term:
+        'case'         as being synonymous with 'patient', and
+        'intervention' as being synonymous with 'treatment'.
+
 """
 import os
 import sys
@@ -21,16 +25,20 @@ from customDefs import projectionOp, learn, evaluate
 from customDefs import getDistParams, plotDendrogram, details2text
 from sklearn.model_selection import train_test_split
 
-ECO_DOMAINS  = {'DOM1': (4, 20), 'DOM2': (4, 20), 'DOM3': (4, 20), 'DOM4': (4, 20)}
+# defines the domains assessed by the WHOQOL-BREF instrument, as well as their boundaries
 ECO_DOMAIN_LB =  4.0
 ECO_DOMAIN_UB = 20.0
+ECO_DOMAINS = {'DOM1': (ECO_DOMAIN_LB, ECO_DOMAIN_UB),
+               'DOM2': (ECO_DOMAIN_LB, ECO_DOMAIN_UB),
+               'DOM3': (ECO_DOMAIN_LB, ECO_DOMAIN_UB),
+               'DOM4': (ECO_DOMAIN_LB, ECO_DOMAIN_UB)}
 
 def main(ss, cutoff):
 
   print()
   tsprint('Job started')
 
-  tsprint('Creating synthetic dataset')
+  tsprint('Creating a synthetic dataset')
 
   # synthetises a sample of patient assessments obtained with the WHOQOL-BREF instrument
   # -- each assessment has 4 variables, DOM1 to DOM4 (see Section 3.1 in the paper)
@@ -42,9 +50,7 @@ def main(ss, cutoff):
   X[X > ECO_DOMAIN_UB] = ECO_DOMAIN_UB
 
   # assigns each case to a single intervention
-  # (in Section 4, see the paragraph describing the Dataset)
-  # (here, you may benefit from taking "case" synonymous to "patient", and
-  #  "intervention" to "treatment", though these parallels are not precise)
+  # (in Section 4, see the paragraph describing the Dataset; also Figure 3)
   tsprint('-- clustering cases with hierarchical method, ward linkage, cutoff at {0:}.'.format(cutoff))
   case_ids = ['P{0}'.format(i+1)  for i in range(ss)]
   sample_order = {case_ids[i] : i for i in range(ss)}
@@ -72,13 +78,13 @@ def main(ss, cutoff):
   train, test = train_test_split(data, test_size=0.33)
 
   # learns representations for interventions
+  tsprint('Learning representations for interventions using the dataset')
   tomains = tuple(ECO_DOMAINS)
   llimits = {domain: ECO_DOMAINS[domain][0] for domain in tomains}
   ulimits = {domain: ECO_DOMAINS[domain][1] for domain in tomains}
-  tsprint('Learning representations for interventions')
   (treatment_s, offers, history) = learn(train, tomains, llimits, ulimits)
 
-  # creates some dictionaries to support the evaluation of the learned representations
+  # creates data structures to support the evaluation of the learned representations
   case_s   = {}
   demands  = {}
   treatment_h = {}
@@ -86,7 +92,9 @@ def main(ss, cutoff):
     scores = row[['DOM1', 'DOM2', 'DOM3', 'DOM4']]
     case_s[case_id]  = scores
     demands[case_id] = projectionOp(scores, tomains, ulimits)
-    treatment_h[case_id] = [row['intervention']]
+    treatment_h[case_id] = [row['intervention']] # each case is assigned to a single intervention,
+                                                 # but the learning process can handle lists with
+                                                 # multiple interventions
 
   # evaluates the learned representations
   tsprint('Evaluating learned representations')
@@ -99,6 +107,7 @@ def main(ss, cutoff):
   hits, tries, details = evaluate(case_ids, treatment_h, demands, offers, details)
   tsprint('   [Test]  average precision of {2:5.3f} ({0:7.3f} hit(s) out of {1})'.format(hits, tries, hits/tries))
 
+  # this saves a file containing the expected benefit of each treatment to all cases
   saveAsText(details2text(details, sample_order, case_ids), 'performance.csv')
 
   # serialises data required to plot the patient vs intervention diagram, and the animated grid
@@ -115,13 +124,13 @@ if __name__ == "__main__":
 
   try:
 
-    ss = int(sys.argv[1])          # sample size (sample contains cases,
-                                   # (each case corresponds to one patient assessment)
+    ss = int(sys.argv[1])          # sample size (sample contains ss cases,
+                                   # (each case corresponds to a unique patient assessment)
 
     cutoff = float(sys.argv[2])    # the cutoff level (see Section 4, paragraph on Dataset)
 
   except (ValueError, IndexError):
 
-    (ss, cutoff) = (100, 20)
+    (ss, cutoff) = (100, 14)
 
   main(ss, cutoff)

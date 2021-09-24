@@ -18,7 +18,7 @@ from sklearn.cluster         import AgglomerativeClustering
 ECO_SEED = 23
 ECO_MAXCORES = 4
 ECO_DATETIME_FMT = '%Y%m%d%H%M%S'
-ECO_MAXNCOLS = 5 # used in the animated grid
+ECO_MAXNCOLS = 6 # used in the animated grid
 
 # constants identifying polygon drawing patterns
 ECO_PTRN_DEMAND  = 0
@@ -62,11 +62,11 @@ def saveAsText(content, filename, _encoding='utf-8'):
 #--------------------------------------------------------------------------------------------------
 def getDistParams():
 
-  # access to clinical dataset employed in the article is subject to local regulations
-  # instead, we use a generative description of the data, obtained as follows:
+  # to substitute for the clinical dataset used in the research (whose access is subject to local 
+  # regulations), we use a generative description of the original data, obtained as follows:
 
   # targetpath = ...
-  # case_s = deserialise(join(*targetpath, 'case_s'))  # file that holds the actual case scores
+  # case_s = deserialise(join(*targetpath, 'case_s'))  # file that holds the real case scores
   # L = [(case_s[case_id]['DOM1'], case_s[case_id]['DOM2'], case_s[case_id]['DOM3'], case_s[case_id]['DOM4']) for case_id in case_s]
   # data = np.array(L)
   # mu = data.mean(0)
@@ -85,15 +85,14 @@ def getPlotParams1():
   unitsizes   = [3, 2.8]
   fontgon     = {'family': 'arial', 'color':  'black', 'weight': 'normal', 'size': 10}
   innerseps   = {'left': 0.06, 'bottom': 0.06, 'right': 0.94, 'top': 0.96, 'wspace': 0.52, 'hspace': 0.30}
-  xoffset     = [ 0.02, -0.20, -0.48, -0.20]
-  yoffset     = [-0.04,  0.04, -0.05, -0.12]
+  xoffset     = [ 0.02, -0.24, -0.50, -0.24]
+  yoffset     = [-0.05,  0.04, -0.05, -0.15]
   titleoffset = [ 0.50,  1.15, -0.32,  0.51]
   tagoffset   = [ 0.78,  0.78, -45]
 
   return (unitsizes, fontgon, innerseps, xoffset, yoffset, titleoffset, tagoffset)
 
 def getPlotParams2():
-  #unitsizes   = [6.0, 5.6]
   unitsizes   = [3, 2.8]
   fontgon     = {'family': 'arial', 'color':  'black', 'weight': 'normal', 'size': 10}
   innerseps   = {'left': 0.06, 'bottom': 0.06, 'right': 0.94, 'top': 0.96, 'wspace': 0.52, 'hspace': 0.40}
@@ -106,14 +105,14 @@ def getPlotParams2():
 
 def getMovParams():
 
-  unitsizes   = [6.0, 5.6]
+  unitsizes   = [3, 2.7]
   fontgon     = {'family': 'arial', 'color':  'black', 'weight': 'normal', 'size': 10}
   innerseps   = {'left': 0.06, 'bottom': 0.10, 'right': 0.94, 'top': 0.80, 'wspace': 0.52, 'hspace': 0.30}
-  xoffset     = [ 0.02, -0.20, -0.48, -0.20]
-  yoffset     = [-0.04,  0.04, -0.05, -0.12]
+  xoffset     = [ 0.02, -0.21, -0.49, -0.21]
+  yoffset     = [-0.05,  0.04, -0.05, -0.13]
   titleoffset = [ 0.50,  1.15, -0.32,  0.51]
   tagoffset   = [ 0.78,  0.78, -45]
-  dpi         = 300
+  dpi         = 200
   fps         = 2
 
   return (unitsizes, fontgon, innerseps, xoffset, yoffset, titleoffset, tagoffset, dpi, fps)
@@ -514,7 +513,13 @@ def plotOfferGrid(case_ids, case_s, treatment_s, details, tomains, ulimits, samp
       plt.gca().autoscale()
       plt.gca().axis('off')
 
-  plt.savefig('patient_treatment_grid', bbox_inches = 'tight')
+  plt.savefig('{0}.pdf'.format(filename),
+               format = 'pdf',
+               dpi = 200,
+               papertype='b0',
+               bbox_inches = 'tight',
+               pad_inches = 0.5)
+
   plt.close(fig)
 
 def drawGuides(tomains, ulimits, xoff, yoff, fontgon):
@@ -646,10 +651,14 @@ def animateOfferGrid(history, train, tomains, ulimits, plotTitle, filename):
       plt.gca().set_ylim([0.0, 1.05])
       plt.gca().set_xlabel('generation')
 
+      plt.gca().scatter(0, 0, marker='.', s=2, color='yellow', label='MAP')
       plt.gca().scatter(0, 0, marker='.', s=2, color='red',    label='Improvement')
       plt.gca().scatter(0, 0, marker='.', s=2, color='blue',   label='Convergence')
-      plt.gca().scatter(0, 0, marker='.', s=2, color='yellow', label='MAP')
-      plt.gca().legend(loc='lower left', fontsize='xx-small', ncol=2, mode='expand', edgecolor='white', bbox_to_anchor=(0.45, 1))
+      plt.gca().legend(loc='lower left',
+                       fontsize='x-small',
+                       ncol=2,
+                       mode='expand',
+                       edgecolor='white', bbox_to_anchor=(0.43, 1))
 
     elif(treatment_id == ' '):
 
