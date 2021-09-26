@@ -4,21 +4,20 @@ Supplementary material from the paper "An Interpretable Recommendation Model for
 
 ---
 
-
 In the `prototype` folder, you will find three scripts:
 
 *   `simulate.py`: builds a synthetic dataset of patient assessments (similar to the dataset described in Section 4 of the paper), performs the learning process detailed in Section 3.3 to learn representations for interventions (i.e., treatments), and evaluates these representations.
-A dendrogram similar to the one shown in Figure 3 is created in the current folder, as well as CSV-file detailing how each sample in the dataset contributed to the overall performance. This script accepts two optional command-line parameters: sample size and cutoff level. Example: `python simulate.py 30 10`
+A dendrogram similar to the one shown in Figure 3 is created in the current folder, as well as CSV-file detailing how each sample in the dataset contributed to the overall performance. This script accepts two optional command-line parameters: sample size and cutoff level. Example: `python simulate.py 30 10`. (This script takes about 10min to complete in a 4-core computer.)
 
-*   `plotGrid.py`: plots two grids showing how each patient may potentially benefit from each intervention. The plots are saved in the `patient_treament_train.pdf` and `patient_treament_test.pdf` files.
+*   `plotGrid.py`: plots two grids showing how each patient may potentially benefit from each intervention. The plots are saved in the `patient_treament_train.pdf` and `patient_treament_test.pdf` files. Example: `python plotGrid.py`.
 
 *   `animateGrid.py`: builds an animation that retraces the learning process from which the representations for interventions were obtained. The animation is
-saved in the `retrace_learning.mp4` file.
+saved in the `retrace_learning.mp4` file. Example: `python animateGrid.py`.
 
-The requirements to run the scripts in this prototype is specified in the `polypaper.yml` file.
+The requirements of the environment needed to run the scripts in this prototype is specified in the `polypaper.yml` file.
 To create an environment using conda, use `conda env create -f polypaper.yml`.
 
-
+In the `examples` folder, you will find files produced by these scripts.
 
 ---
 

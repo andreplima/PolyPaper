@@ -131,6 +131,6 @@ if __name__ == "__main__":
 
   except (ValueError, IndexError):
 
-    (ss, cutoff) = (100, 14)
+    (ss, cutoff) = (108, 14)
 
   main(ss, cutoff)

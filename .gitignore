@@ -4,6 +4,4 @@ __pycache__/
 *.lnk
 *.pyc
 *.pkl
-*.png
-*.mp4
 ~*.*

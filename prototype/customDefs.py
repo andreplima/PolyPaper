@@ -62,7 +62,7 @@ def saveAsText(content, filename, _encoding='utf-8'):
 #--------------------------------------------------------------------------------------------------
 def getDistParams():
 
-  # to substitute for the clinical dataset used in the research (whose access is subject to local 
+  # to substitute for the clinical dataset used in the research (whose access is subject to local
   # regulations), we use a generative description of the original data, obtained as follows:
 
   # targetpath = ...
@@ -118,11 +118,11 @@ def getMovParams():
   return (unitsizes, fontgon, innerseps, xoffset, yoffset, titleoffset, tagoffset, dpi, fps)
 
 def getLearnParams():
-  strategy      = 'best1bin'
-  maxiter       = 500
-  popsize       = 15
-  mutation      = (0.001, 0.500)
-  recombination = 0.60
+  strategy    = 'best1bin'
+  maxiter     = 60
+  popsize     = 25
+  mutation    = (0.001, 0.500)
+  recombination = 0.45
   return (strategy, maxiter, popsize, mutation, recombination)
 
 #--------------------------------------------------------------------------------------------------
@@ -279,6 +279,7 @@ def learn(train, tomains, llimits, ulimits):
                                bounds,
                                args     = args,
                                strategy = strategy,
+                               init     = 'latinhypercube',
                                mutation = mutation,
                                recombination = recombination,
                                maxiter  = maxiter,
@@ -651,7 +652,7 @@ def animateOfferGrid(history, train, tomains, ulimits, plotTitle, filename):
       plt.gca().set_ylim([0.0, 1.05])
       plt.gca().set_xlabel('generation')
 
-      plt.gca().scatter(0, 0, marker='.', s=2, color='yellow', label='MAP')
+      plt.gca().scatter(0, 0, marker='.', s=2, color='green',  label='MAP')
       plt.gca().scatter(0, 0, marker='.', s=2, color='red',    label='Improvement')
       plt.gca().scatter(0, 0, marker='.', s=2, color='blue',   label='Convergence')
       plt.gca().legend(loc='lower left',
@@ -720,7 +721,7 @@ def animateOfferGrid(history, train, tomains, ulimits, plotTitle, filename):
             last_precision = precision
           else:
             # a yellow dot represents no improvement in precision relative to the last iteration
-            plt.gca().scatter(it, precision,   marker='.', s=2, color='yellow')
+            plt.gca().scatter(it, precision,   marker='.', s=2, color='green')
 
         elif(treatment_id == ' '):
 
